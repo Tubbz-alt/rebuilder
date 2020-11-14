@@ -22,6 +22,7 @@ structopt = "0.3"
 rstest = "0.6"
 tar = "0.4"
 tempfile = "3"
+flate2 = "1.0"
 
 
 [profile.release]
