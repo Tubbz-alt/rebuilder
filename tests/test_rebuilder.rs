@@ -7,6 +7,10 @@ use std::io::{Write};
 use std::collections::HashMap;
 use tar::Builder as TarBuilder;
 use tar::Header;
+use std::convert::TryFrom;
+
+
+const ALPM_DB_VERSION: &str = "9";
 
 
 fn get_pkg_desc(pkgname: String, depends: Vec<String>, makedepends: Vec<String>) -> String {
@@ -83,8 +87,7 @@ fn no_reverse_deps() -> (Vec<String>, Option<String>, TempDir) {
     fs::create_dir(localdir).unwrap();
     let file_path = format!("{}/local/ALPM_DB_VERSION", dbpath);
     let mut file = File::create(file_path).unwrap();
-    // TODO: define const
-    writeln!(file, "9").unwrap();
+    writeln!(file, "{}", ALPM_DB_VERSION).unwrap();
 
     // /var/lib/pacman/sync
     let syncdir = format!("{}/sync", dbpath);
@@ -94,8 +97,9 @@ fn no_reverse_deps() -> (Vec<String>, Option<String>, TempDir) {
     let mut header = Header::new_gnu();
 
     let data = desc.as_bytes();
+    let datalen = u64::try_from(desc.len()).unwrap();
     header.set_path("testpkg1-1.0-1/desc").unwrap();
-    header.set_size(188); // TODO: how to set size
+    header.set_size(datalen);
     header.set_gid(0);
     header.set_uid(0);
     header.set_mode(0o644);
