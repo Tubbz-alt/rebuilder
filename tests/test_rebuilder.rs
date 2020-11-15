@@ -4,10 +4,9 @@ use tempfile::TempDir;
 use tempfile::Builder;
 use std::fs::File;
 use std::io::{Write};
-//use flate2::Compression;
-//use flate2::write::GzEncoder;
 use std::collections::HashMap;
 use tar::Builder as TarBuilder;
+use tar::Header;
 
 
 fn get_pkg_desc(pkgname: String, depends: Vec<String>, makedepends: Vec<String>) -> String {
@@ -31,6 +30,7 @@ fn get_pkg_desc(pkgname: String, depends: Vec<String>, makedepends: Vec<String>)
         desc.push_str(&key);
         let val = format!("{}\n", val);
         desc.push_str(&val);
+        desc.push_str("\n");
     }
 
     if !depends.is_empty() {
@@ -49,8 +49,6 @@ fn get_pkg_desc(pkgname: String, depends: Vec<String>, makedepends: Vec<String>)
         desc.push_str("\n");
     }
 
-    dbg!(desc.clone());
-
     desc
 }
 
@@ -62,12 +60,12 @@ pub fn invalid_data() -> (Vec<String>, Option<String>) {
     (pkgnames, dbpath)
 }
 
-//#[rstest]
-//#[should_panic]
+#[rstest]
+#[should_panic]
 fn should_panic(invalid_data: (Vec<String>, Option<String>)) {
     let pkgnames = invalid_data.0;
     let dbpath = invalid_data.1;
-    rebuilder::run(pkgnames, dbpath, None).unwrap();
+    rebuilder::run(pkgnames, dbpath, vec![], None).unwrap();
 }
 
 
@@ -76,8 +74,9 @@ fn no_reverse_deps() -> (Vec<String>, Option<String>, TempDir) {
     let rootdir = Builder::new().prefix("example").tempdir().unwrap();
     let dbpath = rootdir.path().display().to_string();
     let pkgname = String::from("testpkg1");
-    let repos = vec!["core", "extra", "community", "multilib"];
-    let pkgnames = vec![pkgname];
+    let reponame = String::from("test");
+    let _repos = vec![reponame.clone()];
+    let pkgnames = vec![pkgname.clone()];
 
     // /var/lib/pacman/local
     let localdir = format!("{}/local", dbpath);
@@ -89,52 +88,36 @@ fn no_reverse_deps() -> (Vec<String>, Option<String>, TempDir) {
 
     // /var/lib/pacman/sync
     let syncdir = format!("{}/sync", dbpath);
-    fs::create_dir(syncdir).unwrap();
+    fs::create_dir(&syncdir).unwrap();
 
-    // every db needs at least one pkg to be valid.
-    for repo in &repos {
-        dbg!("loop 1");
-        let name = format!("{}.db", repo);
-        let repodir = Builder::new().prefix(&name).tempdir().unwrap();
-        let repodirstr = repodir.path().display().to_string();
-        let placeholder = String::from("placeholder");
-        let placeholderstr = placeholder.clone();
-        let desc = get_pkg_desc(placeholder, vec![], vec![]);
+    let desc = get_pkg_desc(pkgname, vec![], vec![]);
+    let mut header = Header::new_gnu();
 
-        fs::create_dir(format!("{}/{}", repodirstr, placeholderstr)).unwrap();
-        let file_path = format!("{}/{}/desc", repodirstr, placeholderstr);
-        let desc_path = file_path.clone();
-        let mut file = File::create(file_path).unwrap();
-        writeln!(file, "{}", desc).unwrap();
+    let data = desc.as_bytes();
+    header.set_path("testpkg1-1.0-1/desc").unwrap();
+    header.set_size(188); // TODO: how to set size
+    header.set_gid(0);
+    header.set_uid(0);
+    header.set_mode(0o644);
+    header.set_cksum();
 
-        let db = File::create("repo.tar").unwrap();
-        let mut tar = TarBuilder::new(file);
-        dbg!("woop");
-        //(desc_path, format!("{}-1.0-1/desc", placeholderstr)).unwrap();
-        //tar.append_path_with_name(desc_path, format!("{}-1.0-1/desc", placeholderstr)).unwrap();
-        dbg!("ninin");
-    }
-    /*
-    for pkg in &pkgnames {
-        let path = syncdir.clone().join(format!("{}-1-1", pkg));
-        dbg!(path.as_path().display());
-        fs::create_dir_all(path).unwrap();
-    }
-    */
+    let mut archive = TarBuilder::new(Vec::new());
+    archive.append(&header, data).unwrap();
+    archive.finish().unwrap();
+    let data = archive.into_inner().unwrap();
+
+    let mut afile = File::create(format!("{}/{}", syncdir, "test.db")).unwrap();
+    afile.write_all(&data).unwrap();
 
     (pkgnames, Some(dbpath), rootdir)
 }
 
 #[rstest]
 fn test_reverse_deps(no_reverse_deps: (Vec<String>, Option<String>, TempDir)) {
-    println!("lala");
+    let reponame = String::from("test");
     let pkgnames = no_reverse_deps.0;
     let dbpath = no_reverse_deps.1;
-    let dbpath2 = dbpath.clone();
-    println!("googgo");
-    for entry in fs::read_dir(dbpath.unwrap()).unwrap() {
-        dbg!(entry);
-    }
 
-    //rebuilder::run(pkgnames, dbpath, None).unwrap();
+    let res = rebuilder::run(pkgnames.clone(), dbpath, vec![reponame], None).unwrap();
+    assert_eq!(pkgnames[0], res.trim());
 }
