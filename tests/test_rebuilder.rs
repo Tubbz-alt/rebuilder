@@ -74,12 +74,12 @@ fn should_panic(invalid_data: (Vec<String>, Option<String>)) {
 
 
 #[fixture]
-fn no_reverse_deps() -> (Vec<String>, Option<String>, TempDir) {
+fn no_reverse_deps() -> (Vec<String>, Option<String>, Vec<String>, TempDir) {
     let rootdir = Builder::new().prefix("example").tempdir().unwrap();
     let dbpath = rootdir.path().display().to_string();
     let pkgname = String::from("testpkg1");
     let reponame = String::from("test");
-    let _repos = vec![reponame.clone()];
+    let repos = vec![reponame];
     let pkgnames = vec![pkgname.clone()];
 
     // /var/lib/pacman/local
@@ -100,8 +100,6 @@ fn no_reverse_deps() -> (Vec<String>, Option<String>, TempDir) {
     let datalen = u64::try_from(desc.len()).unwrap();
     header.set_path("testpkg1-1.0-1/desc").unwrap();
     header.set_size(datalen);
-    header.set_gid(0);
-    header.set_uid(0);
     header.set_mode(0o644);
     header.set_cksum();
 
@@ -113,15 +111,15 @@ fn no_reverse_deps() -> (Vec<String>, Option<String>, TempDir) {
     let mut afile = File::create(format!("{}/{}", syncdir, "test.db")).unwrap();
     afile.write_all(&data).unwrap();
 
-    (pkgnames, Some(dbpath), rootdir)
+    (pkgnames, Some(dbpath), repos, rootdir)
 }
 
 #[rstest]
-fn test_reverse_deps(no_reverse_deps: (Vec<String>, Option<String>, TempDir)) {
-    let reponame = String::from("test");
+fn test_reverse_deps(no_reverse_deps: (Vec<String>, Option<String>, Vec<String>, TempDir)) {
     let pkgnames = no_reverse_deps.0;
     let dbpath = no_reverse_deps.1;
+    let repos = no_reverse_deps.2;
 
-    let res = rebuilder::run(pkgnames.clone(), dbpath, vec![reponame], None).unwrap();
+    let res = rebuilder::run(pkgnames.clone(), dbpath, repos, None).unwrap();
     assert_eq!(pkgnames[0], res.trim());
 }
