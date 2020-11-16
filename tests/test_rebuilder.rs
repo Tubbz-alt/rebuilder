@@ -171,6 +171,26 @@ fn reverse_deps() -> (Vec<String>, Option<String>, Vec<String>, TempDir) {
     (pkgnames, Some(dbpath), repos, tempdir)
 }
 
+#[fixture]
+fn reverse_make_deps() -> (Vec<String>, Option<String>, Vec<String>, TempDir) {
+    let testpkg = Package::new("testpkg1", "testpkg1", "1.0-1", vec![], vec![]);
+    let testpkg2 = Package::new(
+        "testpkg2",
+        "testpkg2",
+        "1.0-1",
+        vec![],
+        vec![testpkg.name.clone()],
+    );
+    let pkgnames = vec![testpkg.name.clone(), testpkg2.name.clone()];
+    let packages = vec![testpkg, testpkg2];
+
+    let reponame = "test";
+    let (tempdir, dbpath) = init_repodb(reponame.to_string(), packages);
+    let repos = vec![reponame.to_string()];
+
+    (pkgnames, Some(dbpath), repos, tempdir)
+}
+
 #[rstest]
 fn test_no_reverse_deps(no_reverse_deps: (Vec<String>, Option<String>, Vec<String>, TempDir)) {
     let pkgnames = no_reverse_deps.0;
@@ -187,6 +207,18 @@ fn test_reverse_deps(reverse_deps: (Vec<String>, Option<String>, Vec<String>, Te
     let pkgname = &pkgnames[0];
     let dbpath = reverse_deps.1;
     let repos = reverse_deps.2;
+
+    let res = rebuilder::run(vec![pkgname.to_string()], dbpath, repos, None).unwrap();
+    let res_pkgs: Vec<&str> = res.trim().split_ascii_whitespace().collect();
+    assert_eq!(pkgnames, res_pkgs);
+}
+
+#[rstest]
+fn test_reverse_make_deps(reverse_make_deps: (Vec<String>, Option<String>, Vec<String>, TempDir)) {
+    let pkgnames = reverse_make_deps.0.clone();
+    let pkgname = &pkgnames[0];
+    let dbpath = reverse_make_deps.1;
+    let repos = reverse_make_deps.2;
 
     let res = rebuilder::run(vec![pkgname.to_string()], dbpath, repos, None).unwrap();
     let res_pkgs: Vec<&str> = res.trim().split_ascii_whitespace().collect();
