@@ -82,7 +82,7 @@ impl Package {
 }
 
 
-fn init_repo() -> (TempDir, String, String) {
+fn init_repodb(reponame: String, packages: Vec<Package>) -> (TempDir, String) {
     // TODO: do we need a root dir
     let rootdir = Builder::new().prefix("no_reverse_deps").tempdir().unwrap();
     let dbpath = rootdir.path().display().to_string();
@@ -97,7 +97,10 @@ fn init_repo() -> (TempDir, String, String) {
     let syncdir = format!("{}/sync", dbpath);
     fs::create_dir(&syncdir).unwrap();
 
-    (rootdir, dbpath, syncdir)
+    let dbloc = format!("{}/{}.db", syncdir, reponame);
+    create_db(dbloc, packages);
+
+    (rootdir, dbpath)
 }
 
 
@@ -138,39 +141,34 @@ fn should_panic(invalid_data: (Vec<String>, Option<String>)) {
 
 #[fixture]
 fn no_reverse_deps() -> (Vec<String>, Option<String>, Vec<String>, TempDir) {
-    let reponame = String::from("test");
-    let (rootdir, dbpath, syncdir) = init_repo();
-
-    let repos = vec![reponame.clone()];
     let testpkg = Package::new("testpkg1", "testpkg1", "1.0-1", vec![], vec![]);
+    let reponame = "test";
+    let repos = vec![reponame.to_string()];
     let pkgnames = vec![testpkg.name.clone()];
-
-    let dbloc = format!("{}/{}.db", syncdir, reponame);
-    create_db(dbloc, vec![testpkg]);
+    let packages = vec![testpkg];
+    let (rootdir, dbpath) = init_repodb(reponame.to_string(), packages);
 
     (pkgnames, Some(dbpath), repos, rootdir)
 }
 
 #[fixture]
 fn reverse_deps() -> (Vec<String>, Option<String>, Vec<String>, TempDir) {
-    let reponame = String::from("test");
-    let (rootdir, dbpath, syncdir) = init_repo();
-
-    let repos = vec![reponame.clone()];
     let testpkg = Package::new("testpkg1", "testpkg1", "1.0-1", vec![], vec![]);
     let testpkg2 = Package::new(
         "testpkg2",
         "testpkg2",
         "1.0-1",
-        vec!["testpkg1".to_string()],
+        vec![testpkg.name.clone()],
         vec![],
     );
-
     let pkgnames = vec![testpkg.name.clone(), testpkg2.name.clone()];
-    let dbloc = format!("{}/{}.db", syncdir, reponame);
-    create_db(dbloc, vec![testpkg, testpkg2]);
+    let packages = vec![testpkg, testpkg2];
 
-    (pkgnames, Some(dbpath), repos, rootdir)
+    let reponame = "test";
+    let (tempdir, dbpath) = init_repodb(reponame.to_string(), packages);
+    let repos = vec![reponame.to_string()];
+
+    (pkgnames, Some(dbpath), repos, tempdir)
 }
 
 #[rstest]
