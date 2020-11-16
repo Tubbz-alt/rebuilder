@@ -81,21 +81,6 @@ impl Package {
     }
 }
 
-#[fixture]
-pub fn invalid_data() -> (Vec<String>, Option<String>) {
-    let pkgnames = vec![String::from("testpkg1")];
-    let dbpath = Some(String::from("/non-existant-path"));
-
-    (pkgnames, dbpath)
-}
-
-#[rstest]
-#[should_panic]
-fn should_panic(invalid_data: (Vec<String>, Option<String>)) {
-    let pkgnames = invalid_data.0;
-    let dbpath = invalid_data.1;
-    rebuilder::run(pkgnames, dbpath, vec![], None).unwrap();
-}
 
 fn init_repo() -> (TempDir, String, String) {
     // TODO: do we need a root dir
@@ -115,6 +100,42 @@ fn init_repo() -> (TempDir, String, String) {
     (rootdir, dbpath, syncdir)
 }
 
+
+fn create_db(dbloc: String, pkgs: Vec<Package>) {
+    let mut archive = TarBuilder::new(Vec::new());
+
+    for pkg in pkgs {
+        let header = pkg.tarheader();
+        let desc = pkg.desc();
+        let data = desc.as_bytes();
+        archive.append(&header, data).unwrap();
+    }
+
+    archive.finish().unwrap();
+    let data = archive.into_inner().unwrap();
+
+    let mut afile = File::create(dbloc).unwrap();
+    afile.write_all(&data).unwrap();
+}
+
+
+#[fixture]
+pub fn invalid_data() -> (Vec<String>, Option<String>) {
+    let pkgnames = vec![String::from("testpkg1")];
+    let dbpath = Some(String::from("/non-existant-path"));
+
+    (pkgnames, dbpath)
+}
+
+#[rstest]
+#[should_panic]
+fn should_panic(invalid_data: (Vec<String>, Option<String>)) {
+    let pkgnames = invalid_data.0;
+    let dbpath = invalid_data.1;
+    rebuilder::run(pkgnames, dbpath, vec![], None).unwrap();
+}
+
+
 #[fixture]
 fn no_reverse_deps() -> (Vec<String>, Option<String>, Vec<String>, TempDir) {
     let reponame = String::from("test");
@@ -124,17 +145,8 @@ fn no_reverse_deps() -> (Vec<String>, Option<String>, Vec<String>, TempDir) {
     let testpkg = Package::new("testpkg1", "testpkg1", "1.0-1", vec![], vec![]);
     let pkgnames = vec![testpkg.name.clone()];
 
-    let header = testpkg.tarheader();
-    let desc = testpkg.desc();
-    let data = desc.as_bytes();
-
-    let mut archive = TarBuilder::new(Vec::new());
-    archive.append(&header, data).unwrap();
-    archive.finish().unwrap();
-    let data = archive.into_inner().unwrap();
-
-    let mut afile = File::create(format!("{}/{}.db", syncdir, reponame)).unwrap();
-    afile.write_all(&data).unwrap();
+    let dbloc = format!("{}/{}.db", syncdir, reponame);
+    create_db(dbloc, vec![testpkg]);
 
     (pkgnames, Some(dbpath), repos, rootdir)
 }
@@ -153,25 +165,10 @@ fn reverse_deps() -> (Vec<String>, Option<String>, Vec<String>, TempDir) {
         vec!["testpkg1".to_string()],
         vec![],
     );
+
     let pkgnames = vec![testpkg.name.clone(), testpkg2.name.clone()];
-
-    let mut archive = TarBuilder::new(Vec::new());
-
-    let header = testpkg.tarheader();
-    let desc = testpkg.desc();
-    let data = desc.as_bytes();
-    archive.append(&header, data).unwrap();
-
-    let header2 = testpkg2.tarheader();
-    let desc2 = testpkg2.desc();
-    let data2 = desc2.as_bytes();
-    archive.append(&header2, data2).unwrap();
-
-    archive.finish().unwrap();
-    let data = archive.into_inner().unwrap();
-
-    let mut afile = File::create(format!("{}/{}.db", syncdir, reponame)).unwrap();
-    afile.write_all(&data).unwrap();
+    let dbloc = format!("{}/{}.db", syncdir, reponame);
+    create_db(dbloc, vec![testpkg, testpkg2]);
 
     (pkgnames, Some(dbpath), repos, rootdir)
 }
