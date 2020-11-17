@@ -3,10 +3,11 @@ use std::convert::TryFrom;
 use std::fs;
 use std::fs::File;
 use std::io::Write;
-use tar::Builder as TarBuilder;
+use tar::Builder;
 use tar::Header;
-use tempfile::Builder;
 use tempfile::TempDir;
+use tempfile::tempdir;
+
 
 const ALPM_DB_VERSION: &str = "9";
 
@@ -83,8 +84,8 @@ impl Package {
 
 
 fn init_repodb(reponame: String, packages: Vec<Package>) -> (TempDir, String) {
-    // TODO: do we need a root dir
-    let rootdir = Builder::new().prefix("no_reverse_deps").tempdir().unwrap();
+    let rootdir = tempdir().unwrap();
+
     let dbpath = rootdir.path().display().to_string();
     // local dir
     let localdir = format!("{}/local", dbpath);
@@ -105,7 +106,7 @@ fn init_repodb(reponame: String, packages: Vec<Package>) -> (TempDir, String) {
 
 
 fn create_db(dbloc: String, pkgs: Vec<Package>) {
-    let mut archive = TarBuilder::new(Vec::new());
+    let mut archive = Builder::new(Vec::new());
 
     for pkg in pkgs {
         let header = pkg.tarheader();
