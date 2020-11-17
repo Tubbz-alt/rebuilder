@@ -51,6 +51,7 @@ impl Package {
             desc.push_str("%DEPENDS%\n");
             for dep in self.depends.iter() {
                 desc.push_str(dep);
+                desc.push_str("\n");
             }
             desc.push_str("\n");
         }
@@ -59,6 +60,7 @@ impl Package {
             desc.push_str("%MAKEDEPENDS%\n");
             for dep in self.makedepends.iter() {
                 desc.push_str(dep);
+                desc.push_str("\n");
             }
             desc.push_str("\n");
         }
@@ -174,6 +176,21 @@ fn reverse_deps() -> (Vec<String>, Option<String>, Vec<String>, TempDir) {
 }
 
 #[fixture]
+fn multiple_deps() -> (Vec<String>, Option<String>, Vec<String>, TempDir) {
+    let testpkg = Package::new("testpkg1", "testpkg1", "1.0-1", vec![], vec![]);
+    let testpkg2 = Package::new("testpkg2", "testpkg2", "1.0-1", vec![], vec![testpkg.name.clone()]);
+    let testpkg3 = Package::new("testpkg3", "testpkg3", "1-1", vec![testpkg.name.clone(), testpkg2.name.clone()], vec![]);
+    let pkgnames = vec![testpkg.name.clone(), testpkg2.name.clone(), testpkg3.name.clone()];
+    let packages = vec![testpkg3, testpkg2, testpkg];
+
+    let reponame = "test";
+    let (tempdir, dbpath) = init_repodb(reponame.to_string(), packages);
+    let repos = vec![reponame.to_string()];
+
+    (pkgnames, Some(dbpath), repos, tempdir)
+}
+
+#[fixture]
 fn reverse_make_deps() -> (Vec<String>, Option<String>, Vec<String>, TempDir) {
     let testpkg = Package::new("testpkg1", "testpkg1", "1.0-1", vec![], vec![]);
     let testpkg2 = Package::new(
@@ -221,6 +238,18 @@ fn test_reverse_make_deps(reverse_make_deps: (Vec<String>, Option<String>, Vec<S
     let pkgname = &pkgnames[0];
     let dbpath = reverse_make_deps.1;
     let repos = reverse_make_deps.2;
+
+    let res = rebuilder::run(vec![pkgname.to_string()], dbpath, repos, None).unwrap();
+    let res_pkgs: Vec<&str> = res.trim().split_ascii_whitespace().collect();
+    assert_eq!(pkgnames, res_pkgs);
+}
+
+#[rstest]
+fn test_multiple_makedeps(multiple_deps: (Vec<String>, Option<String>, Vec<String>, TempDir)) {
+    let pkgnames = multiple_deps.0.clone();
+    let pkgname = &pkgnames[0];
+    let dbpath = multiple_deps.1;
+    let repos = multiple_deps.2;
 
     let res = rebuilder::run(vec![pkgname.to_string()], dbpath, repos, None).unwrap();
     let res_pkgs: Vec<&str> = res.trim().split_ascii_whitespace().collect();
