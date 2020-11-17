@@ -85,21 +85,21 @@ impl Package {
 
 fn init_repodb(reponame: String, packages: Vec<Package>) -> (TempDir, String) {
     let tempdir = tempdir().unwrap();
-
     let dbpath = tempdir.path().display().to_string();
+
     // local dir
-    let localdir = format!("{}/local", dbpath);
-    fs::create_dir(localdir).unwrap();
-    let file_path = format!("{}/local/ALPM_DB_VERSION", dbpath);
-    let mut file = File::create(file_path).unwrap();
-    writeln!(file, "{}", ALPM_DB_VERSION).unwrap();
+    let localdir = tempdir.path().join("local");
+    fs::create_dir(&localdir).unwrap();
+
+    let mut file = File::create(localdir.join("ALPM_DB_VERSION")).unwrap();
+    file.write_all(ALPM_DB_VERSION.as_bytes()).unwrap();
 
     // sync dir
-    let syncdir = format!("{}/sync", dbpath);
+    let syncdir = tempdir.path().join("sync");
     fs::create_dir(&syncdir).unwrap();
 
-    let dbloc = format!("{}/{}.db", syncdir, reponame);
-    create_db(dbloc, packages);
+    let dbloc = syncdir.join(format!("{}.db", reponame));
+    create_db(dbloc.display().to_string(), packages);
 
     (tempdir, dbpath)
 }
