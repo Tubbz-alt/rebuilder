@@ -84,9 +84,9 @@ impl Package {
 
 
 fn init_repodb(reponame: String, packages: Vec<Package>) -> (TempDir, String) {
-    let rootdir = tempdir().unwrap();
+    let tempdir = tempdir().unwrap();
 
-    let dbpath = rootdir.path().display().to_string();
+    let dbpath = tempdir.path().display().to_string();
     // local dir
     let localdir = format!("{}/local", dbpath);
     fs::create_dir(localdir).unwrap();
@@ -101,7 +101,7 @@ fn init_repodb(reponame: String, packages: Vec<Package>) -> (TempDir, String) {
     let dbloc = format!("{}/{}.db", syncdir, reponame);
     create_db(dbloc, packages);
 
-    (rootdir, dbpath)
+    (tempdir, dbpath)
 }
 
 
