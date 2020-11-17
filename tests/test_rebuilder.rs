@@ -1,18 +1,18 @@
 use rstest::{fixture, rstest};
 use std::convert::TryFrom;
+use std::fmt;
 use std::fs;
 use std::fs::File;
 use std::io::Write;
 use tar::Builder;
 use tar::Header;
-use tempfile::TempDir;
 use tempfile::tempdir;
-
+use tempfile::TempDir;
 
 // pacman database version (lib/libalpm/be_local.c)
 const ALPM_DB_VERSION: &str = "9";
 
-#[derive(Hash, Eq, PartialEq, Debug)]
+#[derive(Hash, Clone, Eq, PartialEq, Debug)]
 struct Package {
     name: String,
     base: String,
@@ -85,6 +85,17 @@ impl Package {
     }
 }
 
+impl fmt::Display for Package {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.name)
+    }
+}
+
+impl PartialEq<&str> for Package {
+    fn eq(&self, other: &&str) -> bool {
+        &self.name.as_str() == other
+    }
+}
 
 fn init_repodb(reponame: String, packages: Vec<Package>) -> (TempDir, String) {
     let tempdir = tempdir().unwrap();
@@ -107,7 +118,6 @@ fn init_repodb(reponame: String, packages: Vec<Package>) -> (TempDir, String) {
     (tempdir, dbpath)
 }
 
-
 fn create_db(dbloc: String, pkgs: Vec<Package>) {
     let mut archive = Builder::new(Vec::new());
 
@@ -125,7 +135,6 @@ fn create_db(dbloc: String, pkgs: Vec<Package>) {
     afile.write_all(&data).unwrap();
 }
 
-
 #[fixture]
 pub fn invalid_data() -> (Vec<String>, Option<String>) {
     let pkgnames = vec![String::from("testpkg1")];
@@ -142,26 +151,24 @@ fn should_panic(invalid_data: (Vec<String>, Option<String>)) {
     rebuilder::run(pkgnames, dbpath, vec![], None).unwrap();
 }
 
-
 #[fixture]
-fn no_reverse_deps() -> (Vec<String>, Option<String>, Vec<String>, TempDir) {
+fn no_reverse_deps() -> (Vec<Package>, Option<String>, Vec<String>, TempDir) {
     let testpkg = Package::new("testpkg1", "testpkg1", "1.0-1", vec![], vec![]);
-    let reponame = "test";
-    let repos = vec![reponame.to_string()];
-    let pkgnames = vec![testpkg.name.clone()];
     let packages = vec![testpkg];
-    let (rootdir, dbpath) = init_repodb(reponame.to_string(), packages);
 
-    (pkgnames, Some(dbpath), repos, rootdir)
+    let reponame = "test";
+    let (rootdir, dbpath) = init_repodb(reponame.to_string(), packages.clone());
+
+    (packages, Some(dbpath), vec![reponame.to_string()], rootdir)
 }
 
 #[fixture]
 fn reverse_deps() -> (Vec<String>, Option<String>, Vec<String>, TempDir) {
-    let testpkg = Package::new("testpkg1", "testpkg1", "1.0-1", vec![], vec![]);
+    let testpkg = Package::new("testpkg1", "testpkg1", "1-1", vec![], vec![]);
     let testpkg2 = Package::new(
         "testpkg2",
         "testpkg2",
-        "1.0-1",
+        "1-1",
         vec![testpkg.name.clone()],
         vec![],
     );
@@ -170,88 +177,111 @@ fn reverse_deps() -> (Vec<String>, Option<String>, Vec<String>, TempDir) {
 
     let reponame = "test";
     let (tempdir, dbpath) = init_repodb(reponame.to_string(), packages);
-    let repos = vec![reponame.to_string()];
 
-    (pkgnames, Some(dbpath), repos, tempdir)
+    (pkgnames, Some(dbpath), vec![reponame.to_string()], tempdir)
 }
 
 #[fixture]
-fn multiple_deps() -> (Vec<String>, Option<String>, Vec<String>, TempDir) {
+fn multiple_deps() -> (Vec<Package>, Option<String>, Vec<String>, TempDir) {
     let testpkg = Package::new("testpkg1", "testpkg1", "1.0-1", vec![], vec![]);
-    let testpkg2 = Package::new("testpkg2", "testpkg2", "1.0-1", vec![], vec![testpkg.name.clone()]);
-    let testpkg3 = Package::new("testpkg3", "testpkg3", "1-1", vec![testpkg.name.clone(), testpkg2.name.clone()], vec![]);
-    let pkgnames = vec![testpkg.name.clone(), testpkg2.name.clone(), testpkg3.name.clone()];
+    let testpkg2 = Package::new(
+        "testpkg2",
+        "testpkg2",
+        "1.0-1",
+        vec![],
+        vec![testpkg.name.clone()],
+    );
+    let testpkg3 = Package::new(
+        "testpkg3",
+        "testpkg3",
+        "1-1",
+        vec![testpkg.name.clone(), testpkg2.name.clone()],
+        vec![],
+    );
     let packages = vec![testpkg3, testpkg2, testpkg];
 
     let reponame = "test";
-    let (tempdir, dbpath) = init_repodb(reponame.to_string(), packages);
-    let repos = vec![reponame.to_string()];
+    let (tempdir, dbpath) = init_repodb(reponame.to_string(), packages.clone());
 
-    (pkgnames, Some(dbpath), repos, tempdir)
+    (packages, Some(dbpath), vec![reponame.to_string()], tempdir)
 }
 
 #[fixture]
-fn reverse_make_deps() -> (Vec<String>, Option<String>, Vec<String>, TempDir) {
-    let testpkg = Package::new("testpkg1", "testpkg1", "1.0-1", vec![], vec![]);
+fn reverse_make_deps() -> (Vec<Package>, Option<String>, Vec<String>, TempDir) {
+    let testpkg = Package::new("testpkg1", "testpkg1", "1-1", vec![], vec![]);
     let testpkg2 = Package::new(
         "testpkg2",
         "testpkg2",
-        "1.0-1",
+        "1-1",
         vec![],
         vec![testpkg.name.clone()],
     );
-    let pkgnames = vec![testpkg.name.clone(), testpkg2.name.clone()];
     let packages = vec![testpkg, testpkg2];
 
     let reponame = "test";
-    let (tempdir, dbpath) = init_repodb(reponame.to_string(), packages);
-    let repos = vec![reponame.to_string()];
+    let (tempdir, dbpath) = init_repodb(reponame.to_string(), packages.clone());
 
-    (pkgnames, Some(dbpath), repos, tempdir)
+    (packages, Some(dbpath), vec![reponame.to_string()], tempdir)
 }
 
 #[rstest]
-fn test_no_reverse_deps(no_reverse_deps: (Vec<String>, Option<String>, Vec<String>, TempDir)) {
-    let pkgnames = no_reverse_deps.0;
-    let dbpath = no_reverse_deps.1;
-    let repos = no_reverse_deps.2;
+fn test_no_reverse_deps(no_reverse_deps: (Vec<Package>, Option<String>, Vec<String>, TempDir)) {
+    let packages = no_reverse_deps.0;
 
-    let res = rebuilder::run(pkgnames.clone(), dbpath, repos, None).unwrap();
-    assert_eq!(pkgnames[0], res.trim());
+    let res = rebuilder::run(
+        vec![packages[0].name.clone()],
+        no_reverse_deps.1,
+        no_reverse_deps.2,
+        None,
+    )
+    .unwrap();
+    assert_eq!(packages[0], res.trim());
 }
 
 #[rstest]
 fn test_reverse_deps(reverse_deps: (Vec<String>, Option<String>, Vec<String>, TempDir)) {
-    let pkgnames = reverse_deps.0.clone();
+    let pkgnames = reverse_deps.0;
     let pkgname = &pkgnames[0];
-    let dbpath = reverse_deps.1;
-    let repos = reverse_deps.2;
 
-    let res = rebuilder::run(vec![pkgname.to_string()], dbpath, repos, None).unwrap();
+    let res = rebuilder::run(
+        vec![pkgname.to_string()],
+        reverse_deps.1,
+        reverse_deps.2,
+        None,
+    )
+    .unwrap();
     let res_pkgs: Vec<&str> = res.trim().split_ascii_whitespace().collect();
     assert_eq!(pkgnames, res_pkgs);
 }
 
 #[rstest]
-fn test_reverse_make_deps(reverse_make_deps: (Vec<String>, Option<String>, Vec<String>, TempDir)) {
-    let pkgnames = reverse_make_deps.0.clone();
-    let pkgname = &pkgnames[0];
-    let dbpath = reverse_make_deps.1;
-    let repos = reverse_make_deps.2;
+fn test_reverse_make_deps(reverse_make_deps: (Vec<Package>, Option<String>, Vec<String>, TempDir)) {
+    let packages = reverse_make_deps.0;
+    let pkgname = &packages[0].name;
 
-    let res = rebuilder::run(vec![pkgname.to_string()], dbpath, repos, None).unwrap();
+    let res = rebuilder::run(
+        vec![pkgname.to_string()],
+        reverse_make_deps.1,
+        reverse_make_deps.2,
+        None,
+    )
+    .unwrap();
     let res_pkgs: Vec<&str> = res.trim().split_ascii_whitespace().collect();
-    assert_eq!(pkgnames, res_pkgs);
+    assert_eq!(packages, res_pkgs);
 }
 
 #[rstest]
-fn test_multiple_makedeps(multiple_deps: (Vec<String>, Option<String>, Vec<String>, TempDir)) {
-    let pkgnames = multiple_deps.0.clone();
-    let pkgname = &pkgnames[0];
-    let dbpath = multiple_deps.1;
-    let repos = multiple_deps.2;
+fn test_multiple_makedeps(multiple_deps: (Vec<Package>, Option<String>, Vec<String>, TempDir)) {
+    let packages = multiple_deps.0;
+    let pkgname = &packages[0];
 
-    let res = rebuilder::run(vec![pkgname.to_string()], dbpath, repos, None).unwrap();
+    let res = rebuilder::run(
+        vec![pkgname.to_string()],
+        multiple_deps.1,
+        multiple_deps.2,
+        None,
+    )
+    .unwrap();
     let res_pkgs: Vec<&str> = res.trim().split_ascii_whitespace().collect();
-    assert_eq!(pkgnames, res_pkgs);
+    assert_eq!(packages[0], res_pkgs[0]);
 }
