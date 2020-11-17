@@ -9,6 +9,7 @@ use tempfile::TempDir;
 use tempfile::tempdir;
 
 
+// pacman database version (lib/libalpm/be_local.c)
 const ALPM_DB_VERSION: &str = "9";
 
 #[derive(Hash, Eq, PartialEq, Debug)]
